@@ -41,7 +41,7 @@ h2{font:500 26px Georgia,serif;margin:0}.hint{color:var(--muted);font-size:13px}
 </style>
 </head>
 <body>
-<header><div class="eyebrow">Visual arts · 2026 study set</div><h1>Lietuvos dailė</h1><p class="sub">Learn the artist and the title. A focused practice space built from your study document.</p></header>
+<header><div class="eyebrow">Pasiruošimas II kurso dailės kontrui</div><h1>Lietuvos dailė</h1></header>
 <main class="wrap">
 <nav>
 <button class="navbtn active" id="collectionTab">Collection</button>
@@ -57,7 +57,7 @@ h2{font:500 26px Georgia,serif;margin:0}.hint{color:var(--muted);font-size:13px}
 </section>
 <section id="practiceView" hidden>
 <div class="panel practice">
-<div class="practice-top"><div><div class="eyebrow" id="modeEyebrow">Random practice</div><h2 id="practiceHeading">Name this artwork</h2></div><div class="count" id="counter">1 / 29</div></div>
+<div class="practice-top"><div><div class="eyebrow" id="modeEyebrow">Random practice</div><h2 id="practiceHeading">Name this artwork</h2></div><div style="display:flex;align-items:center;gap:12px"><div class="count" id="counter">1 / 32</div><button class="secondary" id="resetBtn" hidden>Reset loop</button></div></div>
 <div class="progress"><span id="progressBar"></span></div><div id="previousAnswer" class="hint" style="margin:0 0 16px" aria-live="polite"></div>
 <div class="stage" id="stage">
 <div class="study-image"><img id="artImage" alt="Artwork to identify"></div>
@@ -70,7 +70,7 @@ h2{font:500 26px Georgia,serif;margin:0}.hint{color:var(--muted);font-size:13px}
 <div class="actions"><button class="primary" id="checkBtn">Check answer</button><label class="toggle"><input type="checkbox" id="hideToggle"> Hide typing boxes</label><span class="spacer"></span><button class="next" id="nextBtn" aria-label="Next artwork" title="Next artwork">→</button></div>
 <div class="hint" style="margin-top:13px">Accents, punctuation and capitalisation are ignored. Artist surname alone is accepted.</div>
 </div></div>
-<div class="empty" id="finished" hidden><h2>Loop complete 🎉</h2><p class="hint">You have gone through every artwork in this loop.</p><button class="primary" id="resetBtn">Reset loop</button></div>
+<div class="empty" id="finished" hidden><h2>Loop complete 🎉</h2><p class="hint">You have gone through every artwork in this loop.</p></div>
 </div>
 </section>
 </main>
@@ -88,11 +88,17 @@ function authorOK(input, full){
 }
 function titleVariants(title){
  const values=[title];
- // A parenthetical subtitle/alternate name may be omitted; either form is accepted.
- const noParen=title.replace(/\s*\(([^()]*)\)/g,'').trim();
- if(noParen!==title) values.push(noParen);
- const inside=[...title.matchAll(/\(([^()]*)\)/g)].map(m=>m[1].trim()).filter(Boolean);
- values.push(...inside);
+ // The three numbered Vilniaus ženklai images share the same accepted base title.
+ if(normalize(title).startsWith('vilniaus zenklai')) values.push('Vilniaus ženklai');
+ // "Iš ciklo Vilnius" is contextual information for Aušros vartai, not an alternate title.
+ const isCycleNote=/^aušros vartai\s*\(iš ciklo\s+„?vilnius/i.test(title);
+ if(!isCycleNote){
+  // Parenthetical subtitles/alternate names may be omitted or entered on their own.
+  const noParen=title.replace(/\s*\(([^()]*)\)/g,'').trim();
+  if(noParen!==title) values.push(noParen);
+  const inside=[...title.matchAll(/\(([^()]*)\)/g)].map(m=>m[1].trim()).filter(Boolean);
+  values.push(...inside);
+ }
  return [...new Set(values)];
 }
 function titleMatch(input,title){
@@ -113,7 +119,7 @@ function renderList(){
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function setMode(){
  mode=$('modeSelect').value; $('modeEyebrow').textContent=mode==='loop'?'Loop practice':'Random practice';
- $('practiceHeading').textContent=mode==='loop'?'Complete the loop':'Name this artwork';
+ $('practiceHeading').textContent=mode==='loop'?'Complete the loop':'Name this artwork'; $('resetBtn').hidden=mode!=='loop';
  $('finished').hidden=true; $('stage').hidden=false;lastAnswered=null;$('previousAnswer').textContent='';
  if(mode==='loop') resetLoop(); else {previousRandom=null; showCard(pickRandom());}
 }
