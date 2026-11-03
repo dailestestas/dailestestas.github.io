@@ -58,7 +58,14 @@ h2{font:500 26px Georgia,serif;margin:0}.hint{color:var(--muted);font-size:13px}
 <section id="practiceView" hidden>
 <div class="panel practice">
 <div class="practice-top"><div><div class="eyebrow" id="modeEyebrow">Random practice</div><h2 id="practiceHeading">Name this artwork</h2></div><div style="display:flex;align-items:center;gap:12px"><div class="count" id="counter">1 / 32</div><button class="secondary" id="resetBtn" hidden>Reset loop</button></div></div>
-<div class="progress"><span id="progressBar"></span></div><div id="previousAnswer" class="hint" style="margin:0 0 16px" aria-live="polite"></div>
+<div class="progress"><span id="progressBar"></span></div>
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px">
+<label for="rangeFilter" class="hint" style="font-weight:700">Artwork numbers</label>
+<input id="rangeFilter" class="search" style="width:min(100%,260px)" value="1-32" placeholder="e.g. 1-5, 8-20" aria-label="Artwork number filter">
+<button class="secondary" id="applyFilterBtn" type="button">Apply filter</button>
+<span class="hint" id="filterMessage">Showing all 32 artworks</span>
+</div>
+<div id="previousAnswer" class="hint" style="margin:0 0 16px" aria-live="polite"></div>
 <div class="stage" id="stage">
 <div class="study-image"><img id="artImage" alt="Artwork to identify"></div>
 <div>
@@ -79,6 +86,7 @@ const artworks = [{"id": "1-0", "author": "Laurynas Gucevičius", "title": "Viln
 const $ = id => document.getElementById(id);
 let view='collection', mode='random', current=null, previousRandom=null, wrong=0, locked=false;
 let loopQueue=[], loopSeen=new Set(), loopRetries=new Set();
+let activeArtworks=artworks.slice();
 let lastAnswered=null, advanceTimer=null;
 const normalize = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/ł/g,'l').replace(/đ/g,'d').replace(/þ/g,'th').replace(/æ/g,'ae').replace(/œ/g,'oe').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
 function authorOK(input, full){
@@ -117,20 +125,47 @@ function renderList(){
  $('artList').innerHTML=items.map((a)=>`<article class="panel art"><div class="thumb">${a.image?`<img loading="lazy" src="${a.image}" alt="${esc(a.title)}">`:'<span class="hint">Artwork image unavailable</span>'}</div><div class="artbody"><div class="author">${esc(a.author)}</div><div class="title">${esc(a.title)}</div><div class="num">Artwork ${artworks.indexOf(a)+1} of ${artworks.length}</div></div></article>`).join('');
 }
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function parseArtworkRanges(raw){
+ const text=raw.trim();
+ if(!text) throw new Error('Enter artwork numbers, for example 1-5, 8-20.');
+ const indexes=new Set();
+ for(const part of text.split(',')){
+  const token=part.trim();
+  const m=token.match(/^(\d+)\s*(?:-\s*(\d+))?$/);
+  if(!m) throw new Error('Use numbers and ranges like 1-5, 8-20.');
+  let first=Number(m[1]), last=m[2]?Number(m[2]):first;
+  if(first<1||last<1||first>artworks.length||last>artworks.length||first>last)
+   throw new Error(`Ranges must be between 1 and ${artworks.length}, with the smaller number first.`);
+  for(let n=first;n<=last;n++) indexes.add(n);
+ }
+ return artworks.filter((a,i)=>indexes.has(i+1));
+}
+function applyFilter(){
+ try{
+  activeArtworks=parseArtworkRanges($('rangeFilter').value);
+  $('filterMessage').textContent=`${activeArtworks.length} of ${artworks.length} artworks selected`;
+  $('filterMessage').style.color='var(--accent)';
+  return true;
+ }catch(e){
+  $('filterMessage').textContent=e.message;$('filterMessage').style.color='var(--red)';
+  return false;
+ }
+}
 function setMode(){
+ if(!applyFilter()) return;
  mode=$('modeSelect').value; $('modeEyebrow').textContent=mode==='loop'?'Loop practice':'Random practice';
  $('practiceHeading').textContent=mode==='loop'?'Complete the loop':'Name this artwork'; $('resetBtn').hidden=mode!=='loop';
  $('finished').hidden=true; $('stage').hidden=false;lastAnswered=null;$('previousAnswer').textContent='';
  if(mode==='loop') resetLoop(); else {previousRandom=null; showCard(pickRandom());}
 }
 function pickRandom(){
- let pool=artworks.filter(a=>a.id!==previousRandom);
- if(!pool.length) pool=artworks;
+ let pool=activeArtworks.filter(a=>a.id!==previousRandom);
+ if(!pool.length) pool=activeArtworks;
  const item=pool[Math.floor(Math.random()*pool.length)]; previousRandom=item.id; return item;
 }
 function resetLoop(){
  // Each artwork is queued exactly once at the start; retries are appended at the end.
- loopQueue=artworks.map(a=>a.id); loopSeen=new Set(); loopRetries=new Set();
+ loopQueue=activeArtworks.map(a=>a.id); loopSeen=new Set(); loopRetries=new Set();
  for(let i=loopQueue.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[loopQueue[i],loopQueue[j]]=[loopQueue[j],loopQueue[i]];}
  lastAnswered=null;$('previousAnswer').textContent='';
  $('finished').hidden=true;$('stage').hidden=false;
@@ -146,8 +181,8 @@ function showCard(item){
  updateCounter();
 }
 function updateCounter(){
- if(mode==='random'){$('counter').textContent='Random practice · '+artworks.length+' artworks';$('progressBar').style.width='0%';}
- else {let done=loopSeen.size;$('counter').textContent=`${done} / ${artworks.length} unique artworks shown`;$('progressBar').style.width=(done/artworks.length*100)+'%';}
+ if(mode==='random'){$('counter').textContent='Random practice · '+activeArtworks.length+' artworks';$('progressBar').style.width='0%';}
+ else {let done=loopSeen.size;$('counter').textContent=`${done} / ${activeArtworks.length} unique artworks shown`;$('progressBar').style.width=(done/activeArtworks.length*100)+'%';}
 }
 function rememberPrevious(){
  if(!current)return;
@@ -187,16 +222,17 @@ function next(){
  // for later, but does not increase the unique-artwork count a second time.
  loopSeen.add(current.id);
  if(loopQueue.length){const nextId=loopQueue.shift();showCard(artworks.find(a=>a.id===nextId));}
- else if(loopSeen.size===artworks.length)finishLoop();
+ else if(loopSeen.size===activeArtworks.length)finishLoop();
  else finishLoop();
 }
 function finishLoop(){
  $('stage').hidden=true;$('finished').hidden=false;
- $('counter').textContent=`${loopSeen.size} / ${artworks.length} unique artworks shown`;$('progressBar').style.width=(loopSeen.size/artworks.length*100)+'%';
+ $('counter').textContent=`${loopSeen.size} / ${activeArtworks.length} unique artworks shown`;$('progressBar').style.width=(loopSeen.size/activeArtworks.length*100)+'%';
 }
 $('collectionTab').onclick=()=>showView('collection');
 $('practiceTab').onclick=()=>showView('practice');
 $('modeSelect').onchange=setMode;
+$('applyFilterBtn').onclick=()=>{if(applyFilter()&&view==='practice')setMode();};
 $('search').oninput=renderList;
 $('checkBtn').onclick=check;$('nextBtn').onclick=next;
 $('resetBtn').onclick=resetLoop;
@@ -204,6 +240,7 @@ $('hideToggle').onchange=()=>{$('answerFields').hidden=$('hideToggle').checked||
 $('authorInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('titleInput').focus()});
 $('titleInput').addEventListener('keydown',e=>{if(e.key==='Enter')check()});
 $('totalCount').textContent=artworks.length+' artworks';
+$('filterMessage').textContent='Showing all '+artworks.length+' artworks';
 renderList();
 </script>
 </body></html>
